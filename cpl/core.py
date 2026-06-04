@@ -146,3 +146,10 @@ class CPLResponse:
             execution_trace=d.get("execution_trace", {}),
             raw_output=d.get("raw_output")
         )
+
+CITATION_PATTERNS = [
+    r'\[\d+\]',
+    r'\[[A-Za-z\s]+,\s*\d{4}\]',
+    r'(?i)\b(?:section|sec|art|article)\b\s*\d+',
+    r'(?i)\b(?:v\.|versus)\b',
+]

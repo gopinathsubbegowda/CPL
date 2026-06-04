@@ -1,7 +1,7 @@
 import re
 import json
 from typing import Dict, Any, List, Tuple
-from cpl.core import CPLRequest, CPLResponse
+from cpl.core import CPLRequest, CPLResponse, CITATION_PATTERNS
 
 class ContractVerificationResult:
     def __init__(self, passed: bool, results: Dict[str, bool], details: Dict[str, str]):
@@ -38,15 +38,14 @@ class CPLContractVerifier:
             else:
                 details["json_schema"] = "Passed JSON Schema Check"
 
-        # 2. Postcondition: Min/Max word count verification
-        # First convert content to text if it's a dict
+        # 2. Postcondition: Min/Max word count, sections, and citation checks
+        # Compute text representation lazily — only when at least one text-based check is requested
+        _text_checks = ("min_words", "max_words", "required_sections", "contains_citations")
         text_content = ""
-        if isinstance(content, dict):
-            text_content = json.dumps(content)
-        else:
-            text_content = str(content)
-
-        words = len(re.findall(r'\w+', text_content))
+        words = 0
+        if any(k in postconditions for k in _text_checks):
+            text_content = json.dumps(content) if isinstance(content, dict) else str(content)
+            words = len(re.findall(r'\w+', text_content))
 
         if "min_words" in postconditions:
             min_w = int(postconditions["min_words"])
@@ -88,35 +87,21 @@ class CPLContractVerifier:
         # 4. Postcondition: Citations check
         if "contains_citations" in postconditions:
             citation_req = postconditions["contains_citations"]
-            # Look for common citation patterns: [1], [Name, Year], Section 12, Article 5, etc.
-            citation_patterns = [
-                r'\[\d+\]',                          # [1]
-                r'\[[A-Za-z\s]+,\s*\d{4}\]',          # [Smith, 2021]
-                r'(?i)\b(?:section|sec|art|article)\b\s*\d+', # Section 12 or Article 5
-                r'(?i)\b(?:v\.|versus)\b'             # Case citations e.g. Smith v. Jones
-            ]
-            has_citation = False
-            for pattern in citation_patterns:
-                if re.search(pattern, text_content):
-                    has_citation = True
-                    break
-            
-            if citation_req and not has_citation:
-                passed = False
-                results["contains_citations"] = False
-                details["contains_citations"] = "No citations or legal authority references found in output"
-            else:
-                results["contains_citations"] = True
-                details["contains_citations"] = "Citations and authority references verified present"
+            if citation_req:
+                has_citation = any(re.search(p, text_content) for p in CITATION_PATTERNS)
+                if not has_citation:
+                    passed = False
+                    results["contains_citations"] = False
+                    details["contains_citations"] = "No citations or legal authority references found in output"
+                else:
+                    results["contains_citations"] = True
+                    details["contains_citations"] = "Citations and authority references verified present"
 
-        # 5. Invariant check (Simulated / Basic semantic boundary checks)
+        # 5. Invariant check
         invariants = contract.invariants
         if "no_hallucinations" in invariants and invariants["no_hallucinations"]:
-            # If request spec contains a list of facts, verify output doesn't contain contradictory facts
-            # Standard heuristic: if the spec has a reference context, verify key words match
-            # For this reference implementation, we will perform a basic check or mark as PASSED
             results["no_hallucinations"] = True
-            details["no_hallucinations"] = "Hallucination scanning: verified against input parameters (heuristic check pass)"
+            details["no_hallucinations"] = "Hallucination check: UNIMPLEMENTED — invariant declared but not enforced (Sprint 5 target)"
 
         return ContractVerificationResult(
             passed=passed,
@@ -143,16 +128,17 @@ class CPLContractVerifier:
         for key in required_keys:
             if key not in content:
                 return False, f"Missing required property: '{key}'"
+            if key not in properties:
+                return False, f"Schema error: required property '{key}' has no type definition in 'properties'"
 
         for key, value in content.items():
             if key in properties:
                 prop_schema = properties[key]
                 prop_type = prop_schema.get("type")
-                
-                # Check types
+
                 if prop_type == "string" and not isinstance(value, str):
                     return False, f"Property '{key}' must be a string, got {type(value).__name__}"
-                elif prop_type == "integer" and not isinstance(value, int):
+                elif prop_type == "integer" and (isinstance(value, bool) or not isinstance(value, int)):
                     return False, f"Property '{key}' must be an integer, got {type(value).__name__}"
                 elif prop_type == "number" and not isinstance(value, (int, float)):
                     return False, f"Property '{key}' must be a number, got {type(value).__name__}"

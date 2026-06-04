@@ -1,6 +1,7 @@
 import re
+import json
 from typing import Dict, Any, List, Tuple
-from cpl.core import CPLRequest, CPLResponse
+from cpl.core import CPLRequest, CPLResponse, CITATION_PATTERNS
 
 class CPLLegalValidator:
     @staticmethod
@@ -43,12 +44,7 @@ class CPLLegalValidator:
         content = response.content
         
         # Determine text content
-        text_content = ""
-        if isinstance(content, dict):
-            import json
-            text_content = json.dumps(content)
-        else:
-            text_content = str(content)
+        text_content = json.dumps(content) if isinstance(content, dict) else str(content)
 
         # 1. Enforcement of IRAC (Issue, Rule, Analysis, Conclusion) structure
         irac_terms = ["issue", "rule", "analysis", "conclusion"]
@@ -61,18 +57,7 @@ class CPLLegalValidator:
             errors.append(f"CPL-Legal Verification Fail: Response does not follow the IRAC structure. Missing sections: {', '.join(missing_irac)}")
 
         # 2. Strict authority reference check in response text
-        # Checks if there are citations like "Section X", "Article Y", or case names "v."
-        citation_found = False
-        citation_patterns = [
-            r'(?i)\b(?:section|sec|art|article)\b\s*\d+',
-            r'(?i)\b(?:v\.|versus)\b',
-            r'\[\d+\]',
-            r'\[[A-Za-z\s]+,\s*\d{4}\]'
-        ]
-        for pattern in citation_patterns:
-            if re.search(pattern, text_content):
-                citation_found = True
-                break
+        citation_found = any(re.search(p, text_content) for p in CITATION_PATTERNS)
 
         if not citation_found:
             errors.append("CPL-Legal Verification Fail: Response lacks authority citations (e.g. 'Section X' or case law references)")

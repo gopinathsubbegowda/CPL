@@ -1,3 +1,4 @@
+import copy
 import unittest
 import json
 from cpl.core import CPLRequest, Operation, Constraint, ConstraintPriority, Context, Contract, CPLResponse
@@ -101,7 +102,7 @@ class TestCPLCore(unittest.TestCase):
         self.assertFalse(res_verify_fail.passed)
 
     def test_legal_domain_rules(self):
-        req_dict = self.valid_req_dict.copy()
+        req_dict = copy.deepcopy(self.valid_req_dict)
         req_dict["domain_extension"] = "CPL-Legal"
         req = CPLRequest.from_dict(req_dict)
         

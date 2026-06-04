@@ -57,13 +57,12 @@ class CPLNegotiator:
             can_fulfill = False
         else:
             earned_points += 1.0
-            total_points += 1.0
 
         # 2. Domain Support (Important)
-        supported_domains = model.capabilities.get("domains", [])
+        supported_domains = model.capabilities.get("domains")  # None = key absent = no restriction
         req_domains = request.context.domains
         for domain in req_domains:
-            if supported_domains and domain not in supported_domains:
+            if supported_domains is not None and domain not in supported_domains:
                 reasons.append(f"Model {model.model_id} does not explicitly list domain '{domain}' support")
                 earned_points -= 2.0
                 # Don't fail the request completely if domain isn't explicitly listed, unless strict
@@ -78,15 +77,20 @@ class CPLNegotiator:
             # Check context window
             if c_type == "max_context_tokens":
                 limit = model.constraints.get("context_window", 0)
-                if limit and int(c_val) > limit:
-                    msg = f"Request requires {c_val} tokens, but model only supports {limit}"
-                    if c_pri == ConstraintPriority.MUST:
-                        can_fulfill = False
-                        reasons.append(f"CRITICAL: {msg}")
-                        earned_points -= 4.0
-                    else:
-                        missing_optional.append(msg)
-                        earned_points -= 1.0
+                try:
+                    requested = int(c_val)
+                except (TypeError, ValueError):
+                    reasons.append(f"Constraint '{c_type}' has non-numeric value: {c_val!r}")
+                else:
+                    if limit and requested > limit:
+                        msg = f"Request requires {c_val} tokens, but model only supports {limit}"
+                        if c_pri == ConstraintPriority.MUST:
+                            can_fulfill = False
+                            reasons.append(f"CRITICAL: {msg}")
+                            earned_points -= 4.0
+                        else:
+                            missing_optional.append(msg)
+                            earned_points -= 1.0
 
             # Check structured output requirement
             elif c_type == "structured_output":
@@ -104,15 +108,20 @@ class CPLNegotiator:
             # Check reasoning depth/type
             elif c_type == "reasoning_depth":
                 depth = model.capabilities.get("reasoning", {}).get("chain_of_thought", {}).get("max_depth", 0)
-                if depth and int(c_val) > depth:
-                    msg = f"Requested reasoning depth {c_val} exceeds model limit of {depth}"
-                    if c_pri == ConstraintPriority.MUST:
-                        can_fulfill = False
-                        reasons.append(f"CRITICAL: {msg}")
-                        earned_points -= 2.0
-                    else:
-                        missing_optional.append(msg)
-                        earned_points -= 0.5
+                try:
+                    requested_depth = int(c_val)
+                except (TypeError, ValueError):
+                    reasons.append(f"Constraint '{c_type}' has non-numeric value: {c_val!r}")
+                else:
+                    if depth and requested_depth > depth:
+                        msg = f"Requested reasoning depth {c_val} exceeds model limit of {depth}"
+                        if c_pri == ConstraintPriority.MUST:
+                            can_fulfill = False
+                            reasons.append(f"CRITICAL: {msg}")
+                            earned_points -= 2.0
+                        else:
+                            missing_optional.append(msg)
+                            earned_points -= 0.5
 
         # Calculate score (min 0.0, max 1.0)
         final_score = max(0.0, min(1.0, earned_points / total_points))

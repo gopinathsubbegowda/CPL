@@ -1,4 +1,5 @@
 import os
+import re
 import json
 from typing import Dict, Any, List, Optional
 from cpl.core import CPLRequest, CPLResponse
@@ -83,10 +84,11 @@ class GeminiModel(BaseModel):
                     }]
                 }
                 
-                # Check for json_schema constraint to request structured output from Gemini
                 if "json_schema" in request.contract.postconditions:
-                    # Request structured output via api parameters if supported, or let model output it
-                    pass
+                    data["generationConfig"] = {
+                        "response_mime_type": "application/json",
+                        "response_schema": request.contract.postconditions["json_schema"]
+                    }
                 
                 req = urllib.request.Request(
                     url, 
@@ -98,8 +100,11 @@ class GeminiModel(BaseModel):
                 with urllib.request.urlopen(req, timeout=10) as response:
                     res_body = response.read().decode('utf-8')
                     res_json = json.loads(res_body)
-                    
-                    text_out = res_json['candidates'][0]['content']['parts'][0]['text']
+
+                    candidates = res_json.get('candidates', [])
+                    if not candidates:
+                        raise ValueError("Gemini returned no candidates (content may have been blocked by safety filters)")
+                    text_out = candidates[0]['content']['parts'][0]['text']
                     
                     # Try parsing to dict if JSON schema is requested
                     parsed_content = text_out
