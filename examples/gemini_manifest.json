@@ -1,0 +1,11 @@
+{
+  "model_id": "gemini-2.5-flash",
+  "capabilities": {
+    "operations": ["ANALYZE", "SYNTHESIZE", "TRANSFORM", "VERIFY"],
+    "domains": ["software_engineering", "analysis", "creative_content", "legal"],
+    "structured_output": true
+  },
+  "constraints": {
+    "context_window": 1000000
+  }
+}

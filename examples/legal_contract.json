@@ -1,0 +1,41 @@
+{
+  "cpl_version": "1.0.0",
+  "domain_extension": "CPL-Legal",
+  "operation": "ANALYZE",
+  "spec": {
+    "document_type": "Contract",
+    "jurisdiction": "US-Federal",
+    "document_text": "Clause 4. Limitation of Liability. The contractor represents unlimited liability for all damages, breach of warranties and negligence claims arising from this engagement. No governing law is set.",
+    "authorities": ["Restatement (Second) of Contracts", "UCC Article 2"]
+  },
+  "context": {
+    "domains": ["legal", "analysis"],
+    "temporal_bounds": "2026"
+  },
+  "constraints": [
+    { "type": "max_context_tokens", "value": 15000, "priority": "MUST" },
+    { "type": "structured_output", "value": true, "priority": "SHOULD" }
+  ],
+  "contract": {
+    "preconditions": {
+      "input_present": "document_text"
+    },
+    "postconditions": {
+      "contains_citations": true,
+      "required_sections": ["issue", "rule", "analysis", "conclusion"],
+      "json_schema": {
+        "type": "object",
+        "properties": {
+          "issue": { "type": "string" },
+          "rule": { "type": "string" },
+          "analysis": { "type": "string" },
+          "conclusion": { "type": "string" }
+        },
+        "required": ["issue", "rule", "analysis", "conclusion"]
+      }
+    },
+    "invariants": {
+      "no_hallucinations": true
+    }
+  }
+}
